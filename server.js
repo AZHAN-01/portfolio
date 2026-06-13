@@ -42,40 +42,39 @@ let pool;
 
 // Initialize MySQL database and tables
 async function initDB() {
-  const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    port: process.env.DB_PORT || 3306,
-  };
-
   try {
-    // Connect without database to create it if it doesn't exist
-    const connection = await mysql.createConnection(dbConfig);
-    await connection.query(`CREATE DATABASE IF NOT EXISTS \`azhan_portfolio\``);
-    await connection.end();
+    const dbConfig = {
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      port: Number(process.env.DB_PORT),
+      database: process.env.DB_NAME
+    };
 
-    // Reconnect with database
     pool = mysql.createPool({
       ...dbConfig,
-      database: 'azhan_portfolio',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0
     });
 
+    const connection = await pool.getConnection();
+    connection.release();
+
     // Create projects table
-    const createTableQuery = `
-      CREATE TABLE IF NOT EXISTS projects (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        description TEXT,
-        web_link VARCHAR(512),
-        github_link VARCHAR(512),
-        tech_stack VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
+    
+      const createTableQuery = `
+  CREATE TABLE IF NOT EXISTS projects (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    web_link VARCHAR(512),
+    github_link VARCHAR(512),
+    tech_stack VARCHAR(255),
+    image_url VARCHAR(512),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
+`;
     await pool.query(createTableQuery);
 
     try {
@@ -109,7 +108,7 @@ async function initDB() {
     console.log('Database initialized successfully.');
   } catch (error) {
     console.error('Database initialization failed:', error);
-    console.log('Ensure XAMPP MySQL is running on port 3306 with root user.');
+    console.log('Check Railway database connection variables.');
   }
 }
 
