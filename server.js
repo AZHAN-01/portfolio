@@ -66,7 +66,7 @@ console.log("DB_PASSWORD exists =", !!process.env.DB_PASSWORD);
     connection.release();
 
     // Create projects table
-    
+     
       const createTableQuery = `
   CREATE TABLE IF NOT EXISTS projects (
     id INT AUTO_INCREMENT PRIMARY KEY,
