@@ -43,26 +43,18 @@ let pool;
 // Initialize MySQL database and tables
 async function initDB() {
   try {
-    const dbConfig = {
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      port: Number(process.env.DB_PORT),
-      database: process.env.DB_NAME
-    };
-console.log("DB_HOST =", process.env.DB_HOST);
-console.log("DB_USER =", process.env.DB_USER);
-console.log("DB_PORT =", process.env.DB_PORT);
-console.log("DB_NAME =", process.env.DB_NAME);
-console.log("DB_PASSWORD exists =", !!process.env.DB_PASSWORD);
-console.log("ALL DB VARS:");
-console.log({
-  DB_HOST: process.env.DB_HOST,
-  DB_USER: process.env.DB_USER,
-  DB_PORT: process.env.DB_PORT,
-  DB_NAME: process.env.DB_NAME,
-  DB_PASSWORD_EXISTS: !!process.env.DB_PASSWORD
-});
+   const dbConfig = {
+  host: process.env.MYSQLHOST,
+  user: process.env.MYSQLUSER,
+  password: process.env.MYSQLPASSWORD,
+  port: Number(process.env.MYSQLPORT),
+  database: process.env.MYSQLDATABASE
+};
+console.log("MYSQLHOST =", process.env.MYSQLHOST);
+console.log("MYSQLUSER =", process.env.MYSQLUSER);
+console.log("MYSQLPORT =", process.env.MYSQLPORT);
+console.log("MYSQLDATABASE =", process.env.MYSQLDATABASE);
+console.log("MYSQLPASSWORD exists =", !!process.env.MYSQLPASSWORD);
     pool = mysql.createPool({
       ...dbConfig,
       waitForConnections: true,
