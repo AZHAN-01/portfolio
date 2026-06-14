@@ -15,13 +15,14 @@ const uploadDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+const cloudinary = require('./cloudinary');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'portfolio',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp']
   }
 });
 const upload = multer({ storage: storage });
@@ -274,7 +275,7 @@ app.get('/api/projects', async (req, res) => {
 // 4. Add a project (Admin Only)
 app.post('/api/projects', authenticateAdmin, upload.single('image'), async (req, res) => {
   const { title, description, web_link, github_link, tech_stack } = req.body;
-  const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+  const image_url = req.file ? req.file.path : null;
   
   if (!title) {
     return res.status(400).json({ success: false, message: 'Project title is required.' });
@@ -324,7 +325,8 @@ app.post('/api/settings/profile-pic', authenticateAdmin, upload.single('image'),
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No image uploaded.' });
   }
-  const image_url = `/uploads/${req.file.filename}`;
+
+  const image_url = req.file.path;
   try {
     const query = `
       INSERT INTO settings (setting_key, setting_value) 
