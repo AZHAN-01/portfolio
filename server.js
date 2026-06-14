@@ -200,13 +200,18 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         pass: process.env.SMTP_PASS
       }
     });
+try {
+  await transporter.sendMail({
+    from: process.env.SMTP_USER,
+    to: email,
+    subject: 'Admin Password Reset Code',
+    text: `Your password reset code is: ${code}`
+  });
 
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: email,
-      subject: 'Admin Password Reset Code',
-      text: `Your password reset code is: ${code}. It expires in 15 minutes.`
-    });
+  console.log("EMAIL SENT SUCCESSFULLY");
+} catch (err) {
+  console.error("EMAIL ERROR:", err);
+}
 
     res.json({ success: true, message: 'Verification code sent.' });
   } catch (error) {
