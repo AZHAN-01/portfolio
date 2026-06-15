@@ -27,6 +27,7 @@
       <nav>
         <a href="#home" class="nav-link active">Home</a>
         <a href="#projects" class="nav-link">Projects</a>
+        <a href="#certificates" class="nav-link">Certificates</a>
         <a href="#about" class="nav-link">About</a>
         <a href="#contact" class="nav-link">Contact</a>
         <button id="admin-nav-btn" class="btn btn-outline">
@@ -126,6 +127,29 @@
           </button>
         </form>
       </div>
+
+      <div class="admin-panel-card" style="margin-top: 2rem;">
+        <h4>Add New Certificate</h4>
+        <form id="add-certificate-form" class="project-form" enctype="multipart/form-data">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cert-title">Certificate Title*</label>
+              <input type="text" id="cert-title" placeholder="e.g. AWS Certified Developer" required>
+            </div>
+            <div class="form-group">
+              <label for="cert-issuer">Issuer*</label>
+              <input type="text" id="cert-issuer" placeholder="e.g. Amazon Web Services" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="cert-image">Certificate Image*</label>
+            <input type="file" id="cert-image" name="image" accept="image/*" required>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-plus"></i> Add Certificate
+          </button>
+        </form>
+      </div>
     </div>
 
     <!-- Projects Grid -->
@@ -134,6 +158,24 @@
       <div class="loader-container" id="projects-loader">
         <div class="spinner"></div>
         <p>Loading projects database...</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Certificates Section -->
+  <section id="certificates" class="certificates-section">
+    <div class="section-header">
+      <span class="section-tagline">My Achievements</span>
+      <h2 class="section-title">Certificates</h2>
+      <p class="section-desc">Professional certifications and accomplishments.</p>
+    </div>
+
+    <!-- Certificates Grid -->
+    <div class="projects-grid" id="certificates-container">
+      <!-- Certificate cards will be loaded here dynamically -->
+      <div class="loader-container" id="certificates-loader">
+        <div class="spinner"></div>
+        <p>Loading certificates...</p>
       </div>
     </div>
   </section>
@@ -413,6 +455,15 @@
         </div>
         <button type="submit" class="btn btn-primary btn-block">Update Password</button>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Full Size Image Viewer -->
+  <div id="image-modal" class="modal">
+    <button class="modal-close" id="close-image-modal" style="color: white; z-index: 1000; font-size: 2rem;">&times;</button>
+    <div class="image-modal-content">
+      <img id="full-size-image" src="" alt="Full size view" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+      <h3 id="image-modal-title" style="color: white; text-align: center; margin-top: 1rem; font-family: 'Outfit', sans-serif;"></h3>
     </div>
   </div>
 

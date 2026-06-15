@@ -2,16 +2,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Application State
   const state = {
     projects: [],
+    certificates: [],
     isAdmin: false,
     selectedProject: null
   };
 
   // DOM Elements
   const projectsContainer = document.getElementById('projects-container');
+  const certificatesContainer = document.getElementById('certificates-container');
   const adminNavBtn = document.getElementById('admin-nav-btn');
   const adminControls = document.getElementById('admin-controls');
   const adminLogoutBtn = document.getElementById('admin-logout-btn');
   const addProjectForm = document.getElementById('add-project-form');
+  const addCertificateForm = document.getElementById('add-certificate-form');
 
   // Modals
   const redirectModal = document.getElementById('redirect-modal');
@@ -31,9 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const verifyCodeModal = document.getElementById('verify-code-modal');
   const resetPasswordModal = document.getElementById('reset-password-modal');
 
+  const imageModal = document.getElementById('image-modal');
+  const closeImageModal = document.getElementById('close-image-modal');
+  const fullSizeImage = document.getElementById('full-size-image');
+  const imageModalTitle = document.getElementById('image-modal-title');
+
   // Check Auth State on Startup
   checkAuthentication();
   fetchProjects();
+  fetchCertificates();
   fetchProfilePic();
 
   // Navigation Active Class Toggle
@@ -64,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === forgotPasswordModal) closeModal(forgotPasswordModal);
     if (e.target === verifyCodeModal) closeModal(verifyCodeModal);
     if (e.target === resetPasswordModal) closeModal(resetPasswordModal);
+    if (e.target === imageModal) closeModal(imageModal);
   });
 
   closeRedirectModal.addEventListener('click', () => closeModal(redirectModal));
@@ -72,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('close-forgot-password-modal').addEventListener('click', () => closeModal(forgotPasswordModal));
   document.getElementById('close-verify-code-modal').addEventListener('click', () => closeModal(verifyCodeModal));
   document.getElementById('close-reset-password-modal').addEventListener('click', () => closeModal(resetPasswordModal));
+  if (closeImageModal) closeImageModal.addEventListener('click', () => closeModal(imageModal));
 
   // Admin Nav Button Actions
   adminNavBtn.addEventListener('click', async () => {
@@ -128,8 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
       adminNavBtn.innerHTML = '<i class="fa-solid fa-lock"></i> Admin Login';
       adminControls.classList.add('hidden');
     }
-    // Re-render project cards to show/hide delete buttons
+    // Re-render project & certificate cards to show/hide delete buttons
     renderProjects();
+    renderCertificates();
   }
 
   // Handle Admin Login Form Submission
@@ -454,6 +466,154 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.error('Error deleting project:', err);
+      alert('Network connection error.');
+    }
+  }
+
+  // Fetch Certificates from Database
+  async function fetchCertificates() {
+    try {
+      const res = await fetch('/api/certificates');
+      state.certificates = await res.json();
+      renderCertificates();
+    } catch (err) {
+      console.error('Failed to load certificates:', err);
+      certificatesContainer.innerHTML = `
+        <div class="loader-container">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size: 2.5rem; color: #ff5555; margin-bottom: 1rem;"></i>
+          <p>Failed to load certificates.</p>
+        </div>
+      `;
+    }
+  }
+
+  // Render Certificates Grid
+  function renderCertificates() {
+    if (state.certificates.length === 0) {
+      certificatesContainer.innerHTML = `
+        <div class="loader-container">
+          <i class="fa-solid fa-certificate" style="font-size: 2.5rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
+          <p>No certificates added yet. ${state.isAdmin ? 'Use the admin dashboard above to add one!' : ''}</p>
+        </div>
+      `;
+      return;
+    }
+
+    certificatesContainer.innerHTML = '';
+    state.certificates.forEach(cert => {
+      const card = document.createElement('div');
+      card.className = 'project-card'; // Reuse project card styling
+      card.style.cursor = 'pointer'; // Indicate it's clickable
+      
+      const deleteBtnHTML = state.isAdmin 
+        ? `<button class="btn btn-sm btn-danger delete-certificate-btn" data-id="${cert.id}" style="position: absolute; top: 1rem; right: 1rem; z-index: 10;">
+             <i class="fa-solid fa-trash-can"></i> Delete
+           </button>`
+        : '';
+
+      const imageHTML = cert.image_url 
+        ? `<div style="position: relative;">
+             <img src="${cert.image_url}" class="project-image" alt="${escapeHTML(cert.title)}">
+             ${deleteBtnHTML}
+           </div>` 
+        : '';
+
+      card.innerHTML = `
+        ${imageHTML}
+        <div style="padding: 1.5rem;">
+          <h3 class="project-title" style="margin-top: 0; margin-bottom: 0.5rem;">${escapeHTML(cert.title)}</h3>
+          <p class="project-desc" style="color: var(--accent-cyan); font-weight: 500; font-size: 0.9rem; margin-bottom: 0;">
+            <i class="fa-solid fa-award"></i> ${escapeHTML(cert.issuer || 'Issuer')}
+          </p>
+        </div>
+      `;
+
+      // Handle card click to open image modal
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.delete-certificate-btn')) return;
+        fullSizeImage.src = cert.image_url;
+        imageModalTitle.textContent = cert.title;
+        openModal(imageModal);
+      });
+
+      certificatesContainer.appendChild(card);
+    });
+
+    // Add event listeners to certificate delete buttons
+    document.querySelectorAll('.delete-certificate-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute('data-id');
+        if (confirm('Are you sure you want to delete this certificate?')) {
+          await deleteCertificate(id);
+        }
+      });
+    });
+  }
+
+  // Add Certificate Form Handling
+  if (addCertificateForm) {
+    addCertificateForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = localStorage.getItem('adminToken');
+      if (!token) return alert('Session expired or admin access unauthorized.');
+
+      const formData = new FormData();
+      formData.append('title', document.getElementById('cert-title').value);
+      formData.append('issuer', document.getElementById('cert-issuer').value);
+      
+      const imageFile = document.getElementById('cert-image').files[0];
+      if (imageFile) {
+        formData.append('image', imageFile);
+      } else {
+        return alert('Please select a certificate image.');
+      }
+
+      try {
+        const res = await fetch('/api/certificates', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          addCertificateForm.reset();
+          await fetchCertificates(); // Reload certificates
+          alert('Certificate added successfully!');
+        } else {
+          alert('Failed to add certificate: ' + data.message);
+        }
+      } catch (err) {
+        console.error('Error adding certificate:', err);
+        alert('Network connection error.');
+      }
+    });
+  }
+
+  // Delete Certificate API Call
+  async function deleteCertificate(id) {
+    const token = localStorage.getItem('adminToken');
+    if (!token) return alert('Session expired or admin access unauthorized.');
+
+    try {
+      const res = await fetch(`/api/certificates/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        await fetchCertificates(); // Reload list
+      } else {
+        alert('Failed to delete certificate: ' + data.message);
+      }
+    } catch (err) {
+      console.error('Error deleting certificate:', err);
       alert('Network connection error.');
     }
   }

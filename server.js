@@ -67,6 +67,18 @@ console.log("MYSQLPASSWORD exists =", !!process.env.MYSQLPASSWORD);
     const connection = await pool.getConnection();
     connection.release();
 
+    // Create certificates table
+    const createCertificatesTableQuery = `
+      CREATE TABLE IF NOT EXISTS certificates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        issuer VARCHAR(255),
+        image_url VARCHAR(512),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    await pool.query(createCertificatesTableQuery);
+
     // Create projects table
      
       const createTableQuery = `
@@ -256,6 +268,49 @@ app.get('/api/auth/check', (req, res) => {
     res.json({ authenticated: true });
   } else {
     res.json({ authenticated: false });
+  }
+});
+
+// --- Certificates APIs ---
+
+app.get('/api/certificates', async (req, res) => {
+  try {
+    if (!pool) return res.status(500).json({ success: false, message: 'Database pool not initialized.' });
+    const [rows] = await pool.query('SELECT * FROM certificates ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/certificates', authenticateAdmin, upload.single('image'), async (req, res) => {
+  const { title, issuer } = req.body;
+  const image_url = req.file ? req.file.path : null;
+  
+  if (!title || !image_url) {
+    return res.status(400).json({ success: false, message: 'Certificate title and image are required.' });
+  }
+
+  try {
+    const query = 'INSERT INTO certificates (title, issuer, image_url) VALUES (?, ?, ?)';
+    const [result] = await pool.query(query, [title, issuer, image_url]);
+    res.status(201).json({ success: true, insertId: result.insertId, message: 'Certificate added successfully.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/certificates/:id', authenticateAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [result] = await pool.query('DELETE FROM certificates WHERE id = ?', [id]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Certificate not found.' });
+    }
+    res.json({ success: true, message: 'Certificate deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
