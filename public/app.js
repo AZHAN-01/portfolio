@@ -514,12 +514,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const imageHTML = cert.image_url 
         ? `<div style="position: relative;">
              <img src="${cert.image_url}" class="project-image" alt="${escapeHTML(cert.title)}">
-             ${deleteBtnHTML}
            </div>` 
         : '';
 
       card.innerHTML = `
-        ${imageHTML}
+        <div style="position: relative;">
+          ${deleteBtnHTML}
+          ${imageHTML}
+        </div>
         <div style="padding: 1.5rem;">
           <h3 class="project-title" style="margin-top: 0; margin-bottom: 0.5rem;">${escapeHTML(cert.title)}</h3>
           <p class="project-desc" style="color: var(--accent-cyan); font-weight: 500; font-size: 0.9rem; margin-bottom: 0;">

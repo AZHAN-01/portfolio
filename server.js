@@ -15,24 +15,44 @@ const uploadDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
-const cloudinary = require('./cloudinary');
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+let storage;
+let isCloudinaryConfigured = !!process.env.CLOUDINARY_API_KEY;
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'portfolio',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp']
-  }
-});
+if (isCloudinaryConfigured) {
+  const cloudinary = require('./cloudinary');
+  const { CloudinaryStorage } = require('multer-storage-cloudinary');
+  storage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder: 'portfolio',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp']
+    }
+  });
+} else {
+  storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, uploadDir)
+    },
+    filename: function (req, file, cb) {
+      cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '-'))
+    }
+  });
+}
+
 const upload = multer({ storage: storage });
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+function getImageUrl(file) {
+  if (!file) return null;
+  return isCloudinaryConfigured ? file.path : '/uploads/' + file.filename;
+}
+
 
 // Admin authentication configs
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_SESSION_TOKEN = process.env.ADMIN_SESSION_TOKEN || 'azhan-super-secret-session-token';
+
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -285,7 +305,7 @@ app.get('/api/certificates', async (req, res) => {
 
 app.post('/api/certificates', authenticateAdmin, upload.single('image'), async (req, res) => {
   const { title, issuer } = req.body;
-  const image_url = req.file ? req.file.path : null;
+  const image_url = getImageUrl(req.file);
   
   if (!title || !image_url) {
     return res.status(400).json({ success: false, message: 'Certificate title and image are required.' });
@@ -330,7 +350,7 @@ app.get('/api/projects', async (req, res) => {
 // 4. Add a project (Admin Only)
 app.post('/api/projects', authenticateAdmin, upload.single('image'), async (req, res) => {
   const { title, description, web_link, github_link, tech_stack } = req.body;
-  const image_url = req.file ? req.file.path : null;
+  const image_url = getImageUrl(req.file);
   
   if (!title) {
     return res.status(400).json({ success: false, message: 'Project title is required.' });
@@ -381,7 +401,7 @@ app.post('/api/settings/profile-pic', authenticateAdmin, upload.single('image'),
     return res.status(400).json({ success: false, message: 'No image uploaded.' });
   }
 
-  const image_url = req.file.path;
+  const image_url = getImageUrl(req.file);
   try {
     const query = `
       INSERT INTO settings (setting_key, setting_value) 
@@ -405,4 +425,7 @@ initDB().then(() => {
   app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
   });
+}).catch(err => {
+  console.error("Failed to start server due to DB init error:", err);
 });
+
