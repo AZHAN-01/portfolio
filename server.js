@@ -40,7 +40,16 @@ if (isCloudinaryConfigured) {
   });
 }
 
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: function (req, file, cb) {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed.'), false);
+    }
+    cb(null, true);
+  }
+});
 
 function getImageUrl(file) {
   if (!file) return null;
@@ -398,20 +407,41 @@ app.get('/api/settings/profile-pic', async (req, res) => {
 
 // 7. Update Profile Picture
 app.post('/api/settings/profile-pic', authenticateAdmin, upload.single('image'), async (req, res) => {
-  const { title, description, web_link, github_link, tech_stack } = req.body;
   const image_url = getImageUrl(req.file);
-  
-  if (!title) {
-    return res.status(400).json({ success: false, message: 'Project title is required.' });
+
+  if (!image_url) {
+    return res.status(400).json({ success: false, message: 'Profile picture image is required.' });
   }
 
   try {
-    const query = 'INSERT INTO projects (title, description, web_link, github_link, tech_stack, image_url) VALUES (?, ?, ?, ?, ?, ?)';
-    const [result] = await pool.query(query, [title, description, web_link, github_link, tech_stack, image_url]);
-    res.status(201).json({ success: true, insertId: result.insertId, message: 'Project added successfully.' });
+    const query = `INSERT INTO settings (setting_key, setting_value) VALUES ('profile_pic_url', ?)
+      ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`;
+    await pool.query(query, [image_url]);
+    res.json({ success: true, url: image_url, message: 'Profile picture updated successfully.' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// Multer error handling middleware
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    // Multer-specific errors (file too large, too many files, etc.)
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ success: false, message: 'File is too large. Maximum size is 5MB.' });
+    }
+    return res.status(400).json({ success: false, message: err.message });
+  }
+  if (err.message === 'Only image files are allowed.') {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+  if (err.message === 'Request aborted') {
+    // Client disconnected mid-upload — log quietly, don't crash
+    console.warn('Upload aborted by client.');
+    return; // response is already gone, nothing to send
+  }
+  // Pass other errors to Express default handler
+  next(err);
 });
 
 // Fallback to serve index.html
