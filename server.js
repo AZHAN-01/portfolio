@@ -17,7 +17,8 @@ if (!fs.existsSync(uploadDir)) {
 }
 let storage;
 let isCloudinaryConfigured = !!process.env.CLOUDINARY_API_KEY;
-
+console.log("Cloudinary configured:", isCloudinaryConfigured);
+console.log("API key exists:", !!process.env.CLOUDINARY_API_KEY);
 if (isCloudinaryConfigured) {
   const cloudinary = require('./cloudinary');
   const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -397,19 +398,17 @@ app.get('/api/settings/profile-pic', async (req, res) => {
 
 // 7. Update Profile Picture
 app.post('/api/settings/profile-pic', authenticateAdmin, upload.single('image'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ success: false, message: 'No image uploaded.' });
+  const { title, description, web_link, github_link, tech_stack } = req.body;
+  const image_url = getImageUrl(req.file);
+  
+  if (!title) {
+    return res.status(400).json({ success: false, message: 'Project title is required.' });
   }
 
-  const image_url = getImageUrl(req.file);
   try {
-    const query = `
-      INSERT INTO settings (setting_key, setting_value) 
-      VALUES ('profile_pic_url', ?) 
-      ON DUPLICATE KEY UPDATE setting_value = ?
-    `;
-    await pool.query(query, [image_url, image_url]);
-    res.json({ success: true, url: image_url, message: 'Profile picture updated.' });
+    const query = 'INSERT INTO projects (title, description, web_link, github_link, tech_stack, image_url) VALUES (?, ?, ?, ?, ?, ?)';
+    const [result] = await pool.query(query, [title, description, web_link, github_link, tech_stack, image_url]);
+    res.status(201).json({ success: true, insertId: result.insertId, message: 'Project added successfully.' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
