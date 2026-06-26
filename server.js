@@ -21,7 +21,7 @@ console.log("Cloudinary configured:", isCloudinaryConfigured);
 console.log("API key exists:", !!process.env.CLOUDINARY_API_KEY);
 if (isCloudinaryConfigured) {
   const cloudinary = require('./cloudinary');
-  const { CloudinaryStorage } = require('multer-storage-cloudinary');
+  const CloudinaryStorage = require('multer-storage-cloudinary');
   storage = new CloudinaryStorage({
     cloudinary,
     params: {
