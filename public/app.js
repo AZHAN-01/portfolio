@@ -1,5 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const API_URL = "https://portfolio-y6o6.onrender.com";
+  // Use localhost API during development if the page is loaded locally
+  const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000'
+    : 'https://portfolio-y6o6.onrender.com';
+
+  // Helper function to resolve relative image paths (e.g. /uploads/...) to absolute URLs
+  function resolveImageUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+      return url;
+    }
+    const base = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
+    const path = url.startsWith('/') ? url : '/' + url;
+    return `${base}${path}`;
+  }
   // Application State
   const state = {
     projects: [],
@@ -363,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : '';
 
       const imageHTML = project.image_url 
-        ? `<img src="${project.image_url}" class="project-image" alt="Project Cover">` 
+        ? `<img src="${resolveImageUrl(project.image_url)}" class="project-image" alt="Project Cover">` 
         : '';
 
       card.innerHTML = `
@@ -514,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const imageHTML = cert.image_url 
         ? `<div style="position: relative;">
-             <img src="${cert.image_url}" class="project-image" alt="${escapeHTML(cert.title)}">
+             <img src="${resolveImageUrl(cert.image_url)}" class="project-image" alt="${escapeHTML(cert.title)}">
            </div>` 
         : '';
 
@@ -534,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Handle card click to open image modal
       card.addEventListener('click', (e) => {
         if (e.target.closest('.delete-certificate-btn')) return;
-        fullSizeImage.src = cert.image_url;
+        fullSizeImage.src = resolveImageUrl(cert.image_url);
         imageModalTitle.textContent = cert.title;
         openModal(imageModal);
       });
@@ -713,7 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch(`${API_URL}/api/settings/profile-pic`);
       const data = await res.json();
       if (data.success && data.url) {
-        document.getElementById('profile-pic').src = data.url;
+        document.getElementById('profile-pic').src = resolveImageUrl(data.url);
       }
     } catch (err) {
       console.error('Failed to fetch profile picture:', err);
@@ -744,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (data.success) {
           updateProfileForm.reset();
-          document.getElementById('profile-pic').src = data.url + '?t=' + new Date().getTime(); // Cache buster
+          document.getElementById('profile-pic').src = resolveImageUrl(data.url) + '?t=' + new Date().getTime(); // Cache buster
           alert('Profile picture updated successfully!');
         } else {
           alert('Failed to update picture: ' + data.message);
