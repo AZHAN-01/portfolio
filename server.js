@@ -105,7 +105,8 @@ async function initDB() {
   user: process.env.MYSQLUSER,
   password: process.env.MYSQLPASSWORD,
   port: Number(process.env.MYSQLPORT),
-  database: process.env.MYSQLDATABASE
+  database: process.env.MYSQLDATABASE,
+  ssl: { rejectUnauthorized: false }
 };
 console.log("MYSQLHOST =", process.env.MYSQLHOST);
 console.log("MYSQLUSER =", process.env.MYSQLUSER);
