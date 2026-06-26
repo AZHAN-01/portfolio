@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const API_URL = "https://azhanportfolio.up.railway.app";
+  const API_URL = "https://portfolio-production-6f92.up.railway.app";
   // Application State
   const state = {
     projects: [],
