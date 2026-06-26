@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const API_URL = "https://portfolio-production-6f92.up.railway.app";
+  const API_URL = "https://portfolio-y6o6.onrender.com";
   // Application State
   const state = {
     projects: [],
