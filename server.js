@@ -20,10 +20,11 @@ let isCloudinaryConfigured = !!process.env.CLOUDINARY_API_KEY;
 console.log("Cloudinary configured:", isCloudinaryConfigured);
 console.log("API key exists:", !!process.env.CLOUDINARY_API_KEY);
 if (isCloudinaryConfigured) {
-  const cloudinary = require('./cloudinary');
+  require('./cloudinary'); // Ensure configuration is applied
+  const cloudinaryBase = require('cloudinary'); // Get base object, not .v2
   const CloudinaryStorage = require('multer-storage-cloudinary');
   storage = new CloudinaryStorage({
-    cloudinary,
+    cloudinary: cloudinaryBase,
     params: {
       folder: 'portfolio',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp']
@@ -53,7 +54,7 @@ const upload = multer({
 
 function getImageUrl(file) {
   if (!file) return null;
-  return isCloudinaryConfigured ? file.path : '/uploads/' + file.filename;
+  return isCloudinaryConfigured ? (file.secure_url || file.url || file.path) : '/uploads/' + file.filename;
 }
 
 
