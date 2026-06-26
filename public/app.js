@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const API_URL = "https://azhanportfolio.up.railway.app";
   // Application State
   const state = {
     projects: [],
@@ -91,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('projects').scrollIntoView({ behavior: 'smooth' });
     } else {
       try {
-        const res = await fetch('/api/auth/setup-status');
+        const res = await fetch(`${API_URL}/api/auth/setup-status`);
         const data = await res.json();
         if (data.needsSetup) {
           openModal(setupModal);
@@ -114,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const res = await fetch('/api/auth/check', {
+      const res = await fetch(`${API_URL}/api/auth/check`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -151,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const password = adminPasswordInput.value;
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
@@ -185,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorMsg = document.getElementById('setup-error-msg');
     errorMsg.classList.add('hidden');
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -230,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.disabled = true;
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -260,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMsg.classList.add('hidden');
     
     try {
-      const res = await fetch('/api/auth/verify-code', {
+      const res = await fetch(`${API_URL}/api/auth/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetFlowEmail, code })
@@ -287,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMsg.classList.add('hidden');
     
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(`${API_URL}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetFlowEmail, code, newPassword })
@@ -318,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch Projects from Database
   async function fetchProjects() {
     try {
-      const res = await fetch('/api/projects');
+      const res = await fetch(`${API_URL}/api/projects`);
       state.projects = await res.json();
       renderProjects();
     } catch (err) {
@@ -423,7 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const res = await fetch('/api/projects', {
+      const res = await fetch(`${API_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -451,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!token) return alert('Session expired or admin access unauthorized.');
 
     try {
-      const res = await fetch(`/api/projects/${id}`, {
+      const res = await fetch(`${API_URL}/api/projects/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -473,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch Certificates from Database
   async function fetchCertificates() {
     try {
-      const res = await fetch('/api/certificates');
+      const res = await fetch(`${API_URL}/api/certificates`);
       state.certificates = await res.json();
       renderCertificates();
     } catch (err) {
@@ -572,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       try {
-        const res = await fetch('/api/certificates', {
+        const res = await fetch(`${API_URL}/api/certificates`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -601,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!token) return alert('Session expired or admin access unauthorized.');
 
     try {
-      const res = await fetch(`/api/certificates/${id}`, {
+      const res = await fetch(`${API_URL}/api/certificates/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -709,7 +710,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function fetchProfilePic() {
     try {
-      const res = await fetch('/api/settings/profile-pic');
+      const res = await fetch(`${API_URL}/api/settings/profile-pic`);
       const data = await res.json();
       if (data.success && data.url) {
         document.getElementById('profile-pic').src = data.url;
@@ -733,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
       formData.append('image', fileInput.files[0]);
 
       try {
-        const res = await fetch('/api/settings/profile-pic', {
+        const res = await fetch(`${API_URL}/api/settings/profile-pic`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
