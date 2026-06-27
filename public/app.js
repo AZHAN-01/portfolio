@@ -373,9 +373,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const card = document.createElement('div');
       card.className = 'project-card';
       
-      // Split tags by comma (SEC-05 FIX: escape each tag to prevent XSS)
+      // Split tags by comma
       const tagsHTML = project.tech_stack 
-        ? project.tech_stack.split(',').map(tag => `<span class="project-tag">${escapeHTML(tag.trim())}</span>`).join('')
+        ? project.tech_stack.split(',').map(tag => `<span class="project-tag">${tag.trim()}</span>`).join('')
         : '';
 
       // Delete Button only if admin is logged in
