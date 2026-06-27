@@ -258,32 +258,46 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     // Send email
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.error("SMTP credentials missing in .env. Reset code is:", code);
-        // Fallback for local testing if SMTP is not configured.
-        return res.json({ success: true, message: 'Verification code sent (check server console since SMTP is missing).' });
+      console.error("SMTP credentials missing in .env. Reset code is:", code);
+      return res.json({ success: true, message: 'Verification code sent (check server console since SMTP is missing).' });
     }
 
     const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
-try {
-  await transporter.sendMail({
-    from: process.env.SMTP_USER,
-    to: email,
-    subject: 'Admin Password Reset Code',
-    text: `Your password reset code is: ${code}`
-  });
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
 
-  console.log("EMAIL SENT SUCCESSFULLY");
-} catch (err) {
-  console.error("EMAIL ERROR:", err);
-}
+    try {
+      await transporter.sendMail({
+        from: `"Portfolio Admin" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: 'Admin Password Reset Code',
+        text: `Your password reset code is: ${code}\n\nThis code will expire in 15 minutes.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto;">
+            <h2 style="color: #333;">Password Reset Code</h2>
+            <p>Use the following code to reset your admin password:</p>
+            <div style="background: #f4f4f4; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+              <h1 style="color: #007bff; letter-spacing: 8px; margin: 0;">${code}</h1>
+            </div>
+            <p style="color: #666; font-size: 14px;">This code will expire in <strong>15 minutes</strong>.</p>
+            <p style="color: #999; font-size: 12px;">If you did not request this, please ignore this email.</p>
+          </div>
+        `
+      });
+      console.log("EMAIL SENT SUCCESSFULLY to:", email);
+    } catch (err) {
+      console.error("EMAIL ERROR:", err.message);
+      return res.status(500).json({ success: false, message: 'Failed to send email. Please check your SMTP configuration.' });
+    }
 
     res.json({ success: true, message: 'Verification code sent.' });
   } catch (error) {
