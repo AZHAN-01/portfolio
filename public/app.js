@@ -253,6 +253,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (data.success) {
         resetFlowEmail = email;
+        const instructionEl = document.getElementById('verify-code-instruction');
+        if (instructionEl) {
+          instructionEl.textContent = data.message || 'Check your email for the 4-digit code.';
+          if (data.message && data.message.includes('logs')) {
+            instructionEl.style.color = '#ffaa00'; // warning text color
+          } else {
+            instructionEl.style.color = '';
+          }
+        }
         closeModal(forgotPasswordModal);
         openModal(verifyCodeModal);
       } else {
