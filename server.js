@@ -256,50 +256,97 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     await pool.query('UPDATE admin_users SET reset_code = ?, reset_expires = ? WHERE id = ?', [code, expires, rows[0].id]);
 
-    // Send email
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.error("SMTP credentials missing in .env. Reset code is:", code);
-      return res.json({ success: true, message: 'Verification code sent (check server console since SMTP is missing).' });
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      },
-      tls: {
-        rejectUnauthorized: false
+    // Send email using Resend API (HTTP, port 443 - works on Render Free Tier)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM || 'onboarding@resend.dev',
+            to: email,
+            subject: 'Admin Password Reset Code',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto;">
+                <h2 style="color: #333;">Password Reset Code</h2>
+                <p>Use the following code to reset your admin password:</p>
+                <div style="background: #f4f4f4; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+                  <h1 style="color: #007bff; letter-spacing: 8px; margin: 0;">${code}</h1>
+                </div>
+                <p style="color: #666; font-size: 14px;">This code will expire in <strong>15 minutes</strong>.</p>
+                <p style="color: #999; font-size: 12px;">If you did not request this, please ignore this email.</p>
+              </div>
+            `
+          })
+        });
+        const resData = await response.json();
+        if (response.ok) {
+          console.log("EMAIL SENT SUCCESSFULLY via Resend to:", email);
+          return res.json({ success: true, message: 'Verification code sent via Resend.' });
+        } else {
+          console.error("Resend API Error:", resData);
+          throw new Error(resData.message || 'Resend API failed');
+        }
+      } catch (err) {
+        console.error("Resend send failed, falling back to SMTP/Console:", err.message);
       }
-    });
-
-    try {
-      await transporter.sendMail({
-        from: `"Portfolio Admin" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject: 'Admin Password Reset Code',
-        text: `Your password reset code is: ${code}\n\nThis code will expire in 15 minutes.`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto;">
-            <h2 style="color: #333;">Password Reset Code</h2>
-            <p>Use the following code to reset your admin password:</p>
-            <div style="background: #f4f4f4; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
-              <h1 style="color: #007bff; letter-spacing: 8px; margin: 0;">${code}</h1>
-            </div>
-            <p style="color: #666; font-size: 14px;">This code will expire in <strong>15 minutes</strong>.</p>
-            <p style="color: #999; font-size: 12px;">If you did not request this, please ignore this email.</p>
-          </div>
-        `
-      });
-      console.log("EMAIL SENT SUCCESSFULLY to:", email);
-    } catch (err) {
-      console.error("EMAIL ERROR:", err.message);
-      return res.status(500).json({ success: false, message: 'Failed to send email. Please check your SMTP configuration.' });
     }
 
-    res.json({ success: true, message: 'Verification code sent.' });
+    // Try SMTP fallback
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: "smtp.gmail.com",
+          port: 587,
+          secure: false,
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+          },
+          tls: {
+            rejectUnauthorized: false
+          }
+        });
+
+        await transporter.sendMail({
+          from: `"Portfolio Admin" <${process.env.SMTP_USER}>`,
+          to: email,
+          subject: 'Admin Password Reset Code',
+          text: `Your password reset code is: ${code}\n\nThis code will expire in 15 minutes.`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto;">
+              <h2 style="color: #333;">Password Reset Code</h2>
+              <p>Use the following code to reset your admin password:</p>
+              <div style="background: #f4f4f4; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+                <h1 style="color: #007bff; letter-spacing: 8px; margin: 0;">${code}</h1>
+              </div>
+              <p style="color: #666; font-size: 14px;">This code will expire in <strong>15 minutes</strong>.</p>
+              <p style="color: #999; font-size: 12px;">If you did not request this, please ignore this email.</p>
+            </div>
+          `
+        });
+        console.log("EMAIL SENT SUCCESSFULLY via SMTP to:", email);
+        return res.json({ success: true, message: 'Verification code sent.' });
+      } catch (err) {
+        console.error("SMTP EMAIL ERROR:", err.message);
+        // Fallback: don't return 500 error if we can output code to console
+        console.warn("SMTP failed. Fallback: Reset code is printed to console:", code);
+        return res.json({
+          success: true,
+          message: 'Failed to send email. However, you can retrieve your reset code from the server logs.'
+        });
+      }
+    }
+
+    // Console-only fallback if neither is configured
+    console.log("No email configuration found. Reset code is:", code);
+    return res.json({
+      success: true,
+      message: 'Verification code generated. Please check the server logs.'
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
