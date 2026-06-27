@@ -7,7 +7,32 @@ const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
+
+// JWT Configuration
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set in environment variables. Server cannot start securely.');
+  process.exit(1);
+}
+const JWT_EXPIRES_IN = '2h'; // Tokens expire after 2 hours
+
+// Helper: generate a signed JWT for admin
+function generateToken() {
+  return jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+// Helper: verify a JWT token
+function verifyToken(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return null;
+  }
+}
+
 console.log("SMTP_USER exists:", !!process.env.SMTP_USER);
 console.log("SMTP_PASS exists:", !!process.env.SMTP_PASS);
 // Setup Multer Storage
@@ -45,12 +70,48 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
   fileFilter: function (req, file, cb) {
+    // Check MIME type
     if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed.'), false);
+    }
+    // Check file extension
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!allowedExtensions.includes(ext)) {
       return cb(new Error('Only image files are allowed.'), false);
     }
     cb(null, true);
   }
 });
+
+// Middleware: validate uploaded file's magic bytes (real file signature)
+const IMAGE_SIGNATURES = {
+  'ffd8ff': 'image/jpeg',       // JPEG
+  '89504e47': 'image/png',      // PNG
+  '47494638': 'image/gif',      // GIF
+  '52494646': 'image/webp',     // WebP (RIFF header)
+};
+
+function validateImageMagicBytes(req, res, next) {
+  // Skip if no file uploaded or if using Cloudinary (Cloudinary validates server-side)
+  if (!req.file || isCloudinaryConfigured) return next();
+
+  const filePath = req.file.path;
+  try {
+    const buffer = fs.readFileSync(filePath);
+    const hex = buffer.toString('hex', 0, 4);
+    const isValid = Object.keys(IMAGE_SIGNATURES).some(sig => hex.startsWith(sig));
+
+    if (!isValid) {
+      // Delete the spoofed file immediately
+      fs.unlinkSync(filePath);
+      return res.status(400).json({ success: false, message: 'Invalid image file. File content does not match an image format.' });
+    }
+  } catch (err) {
+    console.error('Magic bytes validation error:', err.message);
+  }
+  next();
+}
 
 function getImageUrl(file) {
   if (!file) return null;
@@ -58,30 +119,26 @@ function getImageUrl(file) {
 }
 
 
-// Admin authentication configs
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-const ADMIN_SESSION_TOKEN = process.env.ADMIN_SESSION_TOKEN || 'azhan-super-secret-session-token';
+// Admin authentication configs (password fallback for legacy; JWT handles session)
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// SEC-04 FIX: Strict CORS – only allow specific production and local origins
 const allowedOrigins = [
   "https://azhandevportfolio.vercel.app",
   "http://localhost:3000",
   "http://localhost:5173",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow server-to-server requests (no origin header)
     if (!origin) return callback(null, true);
-    
-    const isAllowed = allowedOrigins.includes(origin) || 
-                      origin.endsWith('.vercel.app') || 
-                      /^http:\/\/localhost(:\d+)?$/.test(origin) || 
-                      /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin);
-                      
-    if (isAllowed) {
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -187,15 +244,38 @@ console.log("MYSQLPASSWORD exists =", !!process.env.MYSQLPASSWORD);
   }
 }
 
-// Middleware to authenticate admin
+// SEC-01 FIX: JWT-based admin authentication middleware
 function authenticateAdmin(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.split(' ')[1] === ADMIN_SESSION_TOKEN) {
+  if (!authHeader) {
+    return res.status(401).json({ success: false, message: 'Unauthorized. Admin access required.' });
+  }
+  const token = authHeader.split(' ')[1];
+  const decoded = verifyToken(token);
+  if (decoded && decoded.role === 'admin') {
+    req.adminUser = decoded;
     next();
   } else {
-    res.status(401).json({ success: false, message: 'Unauthorized. Admin access required.' });
+    res.status(401).json({ success: false, message: 'Session expired or invalid. Please log in again.' });
   }
 }
+
+// SEC-03 FIX: Rate limiters for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,                   // 10 attempts per window
+  message: { success: false, message: 'Too many attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const resetCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,                    // 5 attempts per window (stricter for code verification)
+  message: { success: false, message: 'Too many verification attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // API Routes
 
@@ -210,23 +290,24 @@ app.get('/api/auth/setup-status', async (req, res) => {
 });
 
 // 2. Register Admin (First-time only)
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   try {
     const [rows] = await pool.query('SELECT COUNT(*) as count FROM admin_users');
     if (rows[0].count > 0) {
       return res.status(403).json({ success: false, message: 'Admin account already exists.' });
     }
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     await pool.query('INSERT INTO admin_users (email, password_hash) VALUES (?, ?)', [email, hash]);
-    res.json({ success: true, token: ADMIN_SESSION_TOKEN });
+    const token = generateToken();
+    res.json({ success: true, token });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // 3. Login
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { password } = req.body;
   try {
     const [rows] = await pool.query('SELECT password_hash FROM admin_users LIMIT 1');
@@ -234,7 +315,8 @@ app.post('/api/auth/login', async (req, res) => {
     
     const match = await bcrypt.compare(password, rows[0].password_hash);
     if (match) {
-      res.json({ success: true, token: ADMIN_SESSION_TOKEN });
+      const token = generateToken();
+      res.json({ success: true, token });
     } else {
       res.status(401).json({ success: false, message: 'Invalid Admin Password.' });
     }
@@ -244,14 +326,14 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // 4. Forgot Password
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
   const { email } = req.body;
   try {
     const [rows] = await pool.query('SELECT * FROM admin_users WHERE email = ? LIMIT 1', [email]);
     if (rows.length === 0) return res.status(404).json({ success: false, message: 'Email not found.' });
 
-    // Generate 4-digit code
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    // Generate 6-digit code (SEC-03: harder to brute-force than 4-digit)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
     await pool.query('UPDATE admin_users SET reset_code = ?, reset_expires = ? WHERE id = ?', [code, expires, rows[0].id]);
@@ -353,7 +435,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // 5. Verify Code
-app.post('/api/auth/verify-code', async (req, res) => {
+app.post('/api/auth/verify-code', resetCodeLimiter, async (req, res) => {
   const { email, code } = req.body;
   try {
     const [rows] = await pool.query('SELECT * FROM admin_users WHERE email = ? AND reset_code = ? AND reset_expires > NOW() LIMIT 1', [email, code]);
@@ -365,13 +447,13 @@ app.post('/api/auth/verify-code', async (req, res) => {
 });
 
 // 6. Reset Password
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', resetCodeLimiter, async (req, res) => {
   const { email, code, newPassword } = req.body;
   try {
     const [rows] = await pool.query('SELECT * FROM admin_users WHERE email = ? AND reset_code = ? AND reset_expires > NOW() LIMIT 1', [email, code]);
     if (rows.length === 0) return res.status(400).json({ success: false, message: 'Invalid or expired session.' });
 
-    const hash = await bcrypt.hash(newPassword, 10);
+    const hash = await bcrypt.hash(newPassword, 12);
     await pool.query('UPDATE admin_users SET password_hash = ?, reset_code = NULL, reset_expires = NULL WHERE id = ?', [hash, rows[0].id]);
     res.json({ success: true, message: 'Password reset successfully.' });
   } catch (error) {
@@ -379,10 +461,13 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
-// 2. Auth Check
+// Auth Check (JWT-based)
 app.get('/api/auth/check', (req, res) => {
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.split(' ')[1] === ADMIN_SESSION_TOKEN) {
+  if (!authHeader) return res.json({ authenticated: false });
+  const token = authHeader.split(' ')[1];
+  const decoded = verifyToken(token);
+  if (decoded && decoded.role === 'admin') {
     res.json({ authenticated: true });
   } else {
     res.json({ authenticated: false });
@@ -401,7 +486,7 @@ app.get('/api/certificates', async (req, res) => {
   }
 });
 
-app.post('/api/certificates', authenticateAdmin, upload.single('image'), async (req, res) => {
+app.post('/api/certificates', authenticateAdmin, upload.single('image'), validateImageMagicBytes, async (req, res) => {
   const { title, issuer } = req.body;
   const image_url = getImageUrl(req.file);
   
@@ -446,7 +531,7 @@ app.get('/api/projects', async (req, res) => {
 });
 
 // 4. Add a project (Admin Only)
-app.post('/api/projects', authenticateAdmin, upload.single('image'), async (req, res) => {
+app.post('/api/projects', authenticateAdmin, upload.single('image'), validateImageMagicBytes, async (req, res) => {
   const { title, description, web_link, github_link, tech_stack } = req.body;
   const image_url = getImageUrl(req.file);
   
@@ -494,7 +579,7 @@ app.get('/api/settings/profile-pic', async (req, res) => {
 });
 
 // 7. Update Profile Picture
-app.post('/api/settings/profile-pic', authenticateAdmin, upload.single('image'), async (req, res) => {
+app.post('/api/settings/profile-pic', authenticateAdmin, upload.single('image'), validateImageMagicBytes, async (req, res) => {
   const image_url = getImageUrl(req.file);
 
   if (!image_url) {
